@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Assignment 5: Integrated Visualization Showcase</title>
+<style>
+  /* === 1. Global & Layout Styles === */
+  :root {
+    --bg-color: #f3f4f6;
+    --card-bg: #ffffff;
+    --text-main: #1f2937;
+    --text-muted: #6b7280;
+    --accent: #2563eb;
+    --border: #e5e7eb;
+    /* A1 Specific Colors */
+    --a1-head: #f9fafb;
+    --a1-accent: #3b82f6;
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text-main);
+    line-height: 1.6;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 20px 20px;
+  }
+
+  /* Section Styles */
+  section {
+    margin-bottom: 40px;
+    scroll-margin-top: 20px;
+  }
+
+  h2.section-title {
+    font-size: 28px;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 10px;
+    margin-bottom: 24px;
+    color: var(--text-main);
+  }
+  
+  .badge-title {
+    background: var(--accent);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    vertical-align: middle;
+    margin-right: 10px;
+  }
+
+  .card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    padding: 24px;
+    border: 1px solid var(--border);
+    overflow: hidden; 
+  }
+
+  /* === 2. Overview Section Styles === */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .overview-item h3 { margin-top: 0; font-size: 18px; color: var(--accent); }
+  @media(max-width: 768px) { .overview-grid { grid-template-columns: 1fr; } }
+
+  /* === 3. Assignment 1 (PSI Table) Styles - Strict Replication === */
+  #a1-wrapper { padding: 0; } /* Reset padding for header bar layout */
+  
+  /* Top Bar */
+  .a1-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border);
+    background: #fff;
+  }
+  .a1-meta { color: var(--text-muted); font-size: 13px; }
+  .a1-updated { 
+    font-size: 12px; 
+    color: #374151; 
+    background: #eef2ff; 
+    border: 1px solid #e0e7ff; 
+    padding: 4px 12px; 
+    border-radius: 999px; 
+  }
+
+  /* Table Styles */
+  #a1-wrapper table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 800px; }
+  #a1-wrapper th, #a1-wrapper td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
+  
+  /* Header Badges */
+  #a1-wrapper th { background: var(--a1-head); font-weight: 600; text-align: right; white-space: nowrap; }
+  #a1-wrapper .a1-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: #374151; background: #fff; }
+  #a1-wrapper .a1-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--a1-accent); display: inline-block; }
+
+  /* First Column (Sticky) */
+  #a1-wrapper th:first-child, #a1-wrapper td:first-child { 
+    text-align: left; 
+    position: sticky; 
+    left: 0; 
+    background: linear-gradient(90deg, #fff 95%, rgba(0,0,0,0.02)); 
+    z-index: 10; 
+    border-right: 1px solid #f1f5f9;
+  }
+  #a1-wrapper th:first-child { background: var(--a1-head); }
+
+  /* Row Styling */
+  #a1-wrapper td { text-align: right; font-variant-numeric: tabular-nums; color: #111827; }
+  #a1-wrapper tr:nth-child(even) td { background: #fbfdff; }
+  #a1-wrapper tr:hover td { background: #f4faff; }
+  
+  /* Text Styling */
+  #a1-wrapper .a1-name { font-weight: 600; font-size: 14px; color: #111827; }
+  #a1-wrapper .a1-sub { display: block; font-size: 11px; color: #9ca3af; margin-top: 2px; font-family: monospace; }
+  
+  #a1-error { color: #dc2626; padding: 20px; display: none; }
+
+  /* === 4. Assignment 2 (SVG) Styles === */
+  #a2-wrapper table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  #a2-wrapper th, #a2-wrapper td { border: 1px solid #e5e7eb; padding: 10px; text-align: center; vertical-align: middle; }
+  #a2-wrapper th { background: #f3f4f6; color: #333; }
+  #a2-wrapper .svg-box { width: 100px; height: 100px; margin: 0 auto; }
+  #a2-wrapper svg { width: 100%; height: 100%; display: block; }
+  .a2-mirror { transform: scaleX(-1); }
+  .a2-rotate { transform: rotate(180deg); }
+  .a2-squeeze { transform: scaleY(0.5); }
+  .a2-gray { filter: grayscale(100%); }
+
+  /* === 5. Iframe Embedding Styles === */
+  .iframe-container {
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+    border: none;
+    display: block;
+    overflow: hidden;
+  }
+  .iframe-label {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    display: block;
+  }
+  
+  /* Heights */
+  .h-chart    { height: 750px; } 
+  .h-chart-11 { height: 950px; }
+  /* Assignment 4 Height Increased to 1600px to prevent heatmap truncation */
+  .h-tall     { height: 1600px; }  
+
+  footer {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <section id="overview">
+    <h2 class="section-title">Overview & Integration Report</h2>
+    <div class="card overview-grid">
+      <div class="overview-item">
+        <h3>About This Page</h3>
+        <p>This page unifies my work from Assignments 1 through 4 into a single coherent dashboard. It features API data integration, SVG transformations, and complex D3.js visualizations.</p>
+        <h3>Integration Strategy</h3>
+        <p>I used a <strong>hybrid approach</strong>:</p>
+        <ul>
+          <li><strong>A1 & A2:</strong> Merged <em>inline</em> using CSS namespacing (e.g., <code>#a1-wrapper</code>) to resolve conflicts between different table styles.</li>
+          <li><strong>A3 & A4:</strong> Embedded via <em>iframes</em> with <strong>customized fixed heights</strong>. A4 height is specifically set to 1600px to ensure the tall heatmap is fully visible.</li>
+        </ul>
+      </div>
+      <div class="overview-item">
+        <h3>Challenges & Solutions</h3>
+        <p><strong>Hardest Part (A4):</strong> A4 contained global CSS (like <code>body { margin: 0 }</code>) that broke the main page layout. <strong>Solution:</strong> Isolating A4 in a sandboxed iframe prevented these global styles from leaking out.</p>
+        <p><strong>Difficulty (Responsive Layout):</strong> Charts grew too tall on wide screens. <strong>Solution:</strong> I implemented a <code>max-width</code> constraint and fine-tuned container heights individually.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="assignment1">
+    <h2 class="section-title"><span class="badge-title">A1</span> PSI Readings (API Data)</h2>
+    <div class="card" id="a1-wrapper">
+      <div class="a1-topbar">
+        <div class="a1-meta" id="a1-meta">Loading readings...</div>
+        <div class="a1-updated" id="a1-updated">Updating...</div>
+      </div>
+      
+      <div style="overflow-x: auto;">
+        <table id="psi-table">
+          <thead id="a1-thead"></thead>
+          <tbody id="a1-tbody"></tbody>
+        </table>
+      </div>
+      <div id="a1-error"></div>
+    </div>
+  </section>
+
+  <section id="assignment2">
+    <h2 class="section-title"><span class="badge-title">A2</span> SVG Transformations</h2>
+    <div class="card" id="a2-wrapper">
+      <p>Demonstrating SVG manipulation via CSS transforms (Mirror, Rotate, Squeeze, Grayscale).</p>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>SVG #</th>
+              <th>Original</th>
+              <th>Mirrored</th>
+              <th>Rotated 180°</th>
+              <th>Squeezed (50%)</th>
+              <th>Grayscale</th>
+            </tr>
+          </thead>
+          <tbody id="a2-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="assignment3">
+    <h2 class="section-title"><span class="badge-title">A3</span> Interactive D3 Charts</h2>
+    <p style="margin-bottom:20px;">A collection of 5 distinct D3.js visualizations. Hover over elements to see interactions.</p>
+    
+    <div style="display:grid; gap:30px;">
+      <div class="card">
+        <span class="iframe-label">Chart 1: Vector Space (Grid Alignment)</span>
+        <iframe src="chart1.html" class="iframe-container h-chart" scrolling="no" title="Chart 1"></iframe>
+      </div>
+      <div class="card">
+        <span class="iframe-label">Chart 7: Venn Diagram (Set Intersections)</span>
+        <iframe src="chart7.html" class="iframe-container h-chart" scrolling="no" title="Chart 7"></iframe>
+      </div>
+      <div class="card">
+        <span class="iframe-label">Chart 11: Probability Density Function (Shading)</span>
+        <iframe src="chart11.html" class="iframe-container h-chart-11" scrolling="no" title="Chart 11"></iframe>
+      </div>
+      <div class="card">
+        <span class="iframe-label">Chart 5: Math Plots</span>
+        <iframe src="chart5.html" class="iframe-container h-chart" scrolling="no" title="Chart 5"></iframe>
+      </div>
+      <div class="card">
+        <span class="iframe-label">Chart 8: Bar Chart</span>
+        <iframe src="chart8.html" class="iframe-container h-chart" scrolling="no" title="Chart 8"></iframe>
+      </div>
+    </div>
+  </section>
+
+  <section id="assignment4">
+    <h2 class="section-title"><span class="badge-title">A4</span> Robustness Dashboard</h2>
+    <div class="card" style="padding:0; overflow:hidden;">
+      <iframe src="assignment4.html" class="iframe-container h-tall" scrolling="no" title="Assignment 4 Dashboard"></iframe>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <p>IDV Assignment 5 Integration Project · 2025</p>
+</footer>
+
+<script>
+  /* --- A1 Logic (Restored to match image format) --- */
+  (async function initA1() {
+    const meta = document.getElementById('a1-meta');
+    const updated = document.getElementById('a1-updated');
+    const thead = document.getElementById('a1-thead');
+    const tbody = document.getElementById('a1-tbody');
+    const errorEl = document.getElementById('a1-error');
+    
+    // Exact mapping from image keys
+    const prettyName = (key) => {
+      const map = {
+        "o3_sub_index": "O\u2083 Sub-Index",
+        "pm10_sub_index": "PM\u2081\u2080 Sub-Index",
+        "pm25_sub_index": "PM\u2082.\u2085 Sub-Index",
+        "so2_sub_index": "SO\u2082 Sub-Index",
+        "co_sub_index": "CO Sub-Index",
+        "no2_one_hour_max": "NO\u2082 1-hour Max",
+        "o3_eight_hour_max": "O\u2083 8-hour Max",
+        "pm10_twenty_four_hourly": "PM\u2081\u2080 24-hour",
+        "pm25_twenty_four_hourly": "PM\u2082.\u2085 24-hour",
+        "so2_twenty_four_hourly": "SO\u2082 24-hour",
+        "co_eight_hour_max": "CO 8-hour Max",
+        "psi_twenty_four_hourly": "PSI 24-hour"
+      };
+      // Fallback formatter
+      return map[key] ? map[key] : key.replace(/_/g,' ').replace(/\b\w/g, s => s.toUpperCase());
+    };
+
+    try {
+      const res = await fetch('https://api.data.gov.sg/v1/environment/psi');
+      if (!res.ok) throw new Error('API Error');
+      const data = await res.json();
+      const items = data.items[0];
+      const readings = items.readings;
+      
+      // Regions: enforce the order from the image
+      const regionOrder = ['north','south','east','west','central'];
+      // Filter out 'national' if it exists to strictly match the 5-column image, 
+      // or keep it if you want full data. The image shows 5 badges. I will prioritize the regionOrder list.
+      
+      // 1. Build Header
+      const hRow = document.createElement('tr');
+      const th0 = document.createElement('th');
+      th0.textContent = 'Reading / Region';
+      hRow.appendChild(th0);
+
+      regionOrder.forEach(r => {
+        const th = document.createElement('th');
+        // Badge style structure
+        th.innerHTML = `<span class="a1-badge"><span class="a1-dot"></span>${r}</span>`;
+        hRow.appendChild(th);
+      });
+      thead.innerHTML = '';
+      thead.appendChild(hRow);
+
+      // 2. Build Rows
+      const readingKeys = Object.keys(readings).sort(); // Alphabetical order usually
+      tbody.innerHTML = '';
+      
+      readingKeys.forEach(key => {
+        const tr = document.createElement('tr');
+        
+        // Name Column
+        const tdName = document.createElement('td');
+        tdName.innerHTML = `<div class="a1-name">${prettyName(key)}</div><span class="a1-sub">${key}</span>`;
+        tr.appendChild(tdName);
+
+        // Data Columns
+        regionOrder.forEach(r => {
+          const td = document.createElement('td');
+          const val = readings[key][r];
+          td.textContent = (val !== undefined) ? val : '-';
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      // 3. Update Meta
+      meta.textContent = `Loaded: ${readingKeys.length} readings`;
+      updated.textContent = `Updated: ${new Date(items.update_timestamp).toLocaleString()}`;
+
+    } catch (e) {
+      errorEl.style.display = 'block';
+      errorEl.textContent = 'Failed to load PSI data. (Note: API requires internet access)';
+    }
+  })();
+
+  /* --- A2 Logic (Restored ALL 10 SVGs) --- */
+  (function initA2() {
+    const tbody = document.getElementById('a2-tbody');
+    // Full list of 10 SVGs extracted from Assignment 2
+    const svgs = [
+      { name: "Arrow", color: "#FF6B6B", content: '<polygon points="50,10 90,50 70,50 70,90 30,90 30,50 10,50" />' },
+      { name: "House", color: "#4ECDC4", content: '<polygon points="50,10 90,40 90,90 10,90 10,40"/><rect x="35" y="55" width="15" height="20" fill="#FFE66D"/><rect x="60" y="55" width="20" height="15" fill="#95E1D3"/>' },
+      { name: "Tree", color: "none", content: '<rect x="42" y="60" width="16" height="30" fill="#8B4513"/><circle cx="50" cy="35" r="25" fill="#2ECC71"/><circle cx="35" cy="45" r="18" fill="#27AE60"/><circle cx="65" cy="50" r="20" fill="#229954"/>' },
+      { name: "Shooting Star", color: "none", content: '<polygon points="70,30 75,45 90,45 78,55 82,70 70,60 58,70 62,55 50,45 65,45" fill="#FFD700"/><line x1="50" y1="45" x2="10" y2="70" stroke="#FFA500" stroke-width="3"/><line x1="50" y1="50" x2="15" y2="80" stroke="#FF8C00" stroke-width="2"/>' },
+      { name: "Fish", color: "none", content: '<ellipse cx="50" cy="50" rx="30" ry="20" fill="#FF6B9D"/><polygon points="20,50 10,40 10,60" fill="#C44569"/><circle cx="65" cy="45" r="3" fill="#000"/><path d="M 75 45 Q 85 40 80 50 Q 85 60 75 55 Z" fill="#FFC5D9"/>' },
+      { name: "Moon & Star", color: "none", content: '<path d="M 40 20 Q 30 50 40 80 Q 60 70 60 50 Q 60 30 40 20 Z" fill="#F4D03F"/><polygon points="75,25 77,32 85,32 79,37 81,45 75,40 69,45 71,37 65,32 73,32" fill="#555"/>' },
+      { name: "Coffee Cup", color: "none", content: '<rect x="30" y="40" width="35" height="40" rx="5" fill="#D4A574"/><rect x="30" y="40" width="35" height="15" fill="#8B4513"/><path d="M 65 50 Q 75 50 75 60 Q 75 70 65 70" stroke="#A0826D" stroke-width="3" fill="none"/><path d="M 40 25 Q 42 30 40 35" stroke="#999" stroke-width="2" fill="none"/><path d="M 50 20 Q 52 25 50 30" stroke="#999" stroke-width="2" fill="none"/>' },
+      { name: "Umbrella", color: "none", content: '<path d="M 50 30 Q 25 30 20 50 L 30 50 Q 35 35 50 35 Q 65 35 70 50 L 80 50 Q 75 30 50 30 Z" fill="#E74C3C"/><line x1="50" y1="30" x2="50" y2="75" stroke="#34495E" stroke-width="3"/><path d="M 50 75 Q 55 80 50 85" stroke="#34495E" stroke-width="3" fill="none"/>' },
+      { name: "Music Note", color: "none", content: '<ellipse cx="35" cy="70" rx="12" ry="8" fill="#9B59B6"/><rect x="45" y="25" width="4" height="45" fill="#8E44AD"/><path d="M 49 25 Q 70 20 70 35 L 70 50 Q 70 45 49 50 Z" fill="#9B59B6"/>' },
+      { name: "Rocket", color: "none", content: '<polygon points="50,10 60,50 50,45 40,50" fill="#3498DB"/><rect x="45" y="45" width="10" height="30" fill="#2980B9"/><polygon points="40,75 45,75 45,85" fill="#E67E22"/><polygon points="55,75 60,75 60,85" fill="#E67E22"/><circle cx="50" cy="30" r="4" fill="#ECF0F1"/><polygon points="40,50 35,60 40,65" fill="#E74C3C"/><polygon points="60,50 65,60 60,65" fill="#E74C3C"/>' }
+    ];
+
+    svgs.forEach((item, idx) => {
+      // If color is 'none', it means the content has its own fills. Otherwise use the single color.
+      const fillAttr = item.color === 'none' ? '' : `fill="${item.color}"`;
+      const baseSvg = `<svg viewBox="0 0 100 100" ${fillAttr}>${item.content}</svg>`;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>#${idx+1} ${item.name}</strong></td>
+        <td><div class="svg-box">${baseSvg}</div></td>
+        <td><div class="svg-box a2-mirror">${baseSvg}</div></td>
+        <td><div class="svg-box a2-rotate">${baseSvg}</div></td>
+        <td><div class="svg-box a2-squeeze">${baseSvg}</div></td>
+        <td><div class="svg-box a2-gray">${baseSvg}</div></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  })();
+</script>
+
+</body>
+</html>

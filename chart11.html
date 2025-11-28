@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Chart 11 - Probability Density (with interaction)</title>
+<style>
+  body{font-family:Georgia,serif;background:#e8f0ef;margin:0;padding:24px;display:flex;justify-content:center;overflow-x:hidden}
+  .wrap{background:#fff;max-width:980px;width:100%;padding:28px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  h1{margin:0 0 12px 8px;font-weight:500;color:#222}
+  svg{display:block}
+  .axis path,.axis line{stroke:#666;shape-rendering:crispEdges}
+  .y-grid line,.x-grid line{stroke:#e6e6e6}
+  .chart-title{font-size:24px;text-anchor:middle}
+  .xlabel{font-size:20px;font-style:italic}
+  .ylabel{font-size:22px}
+  .curve{fill:none;stroke-width:3.2px;pointer-events:none}
+  .gold{stroke:#e3b647}
+  .teal{stroke:#2f7f86}
+  .shade{fill:#bfc5c9;opacity:.45;pointer-events:none}
+  .overlap{fill:#666;opacity:.35;pointer-events:none}
+  .vline{stroke:#333;stroke-dasharray:6 6;stroke-width:2px;pointer-events:none}
+  .legend text{font-size:20px;font-style:italic}
+  .legend line{stroke-width:5px;stroke-linecap:round}
+  /* 交互 */
+  .crosshair{stroke:#888;stroke-dasharray:4 4;pointer-events:none}
+  .dot{fill:#fff;stroke-width:2px;pointer-events:none}
+  .dot-gold{stroke:#e3b647}.dot-teal{stroke:#2f7f86}
+  .tooltip{
+    position:absolute;background:rgba(0,0,0,.85);color:#fff;
+    padding:8px 10px;border-radius:8px;font-size:13px;line-height:1.25;
+    pointer-events:none;opacity:0;transition:opacity .15s;transform:translate(10px,-12px)
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Chart 11 (function)</h1>
+    <!-- 初始尺寸仅用于 D3 布局；下方补丁会改为 viewBox+响应式，避免裁切与溢出 -->
+    <svg id="chart11" width="820" height="520"></svg>
+  </div>
+  <div id="tooltip" class="tooltip"></div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+(function(){
+  const root = d3.select("#chart11"),
+        W = +root.attr("width"),
+        H = +root.attr("height"),
+        margin = {top:70,right:40,bottom:70,left:80},
+        width = W - margin.left - margin.right,
+        height = H - margin.top - margin.bottom;
+
+  const g = root.append("g").attr("transform",`translate(${margin.left},${margin.top})`);
+
+  // Scales
+  const x = d3.scaleLinear().domain([-2,5]).range([0,width]);
+  const y = d3.scaleLinear().domain([0,0.35]).range([height,0]);
+
+  // Grid, axes, border
+  g.append("g").attr("class","y-grid")
+    .call(d3.axisLeft(y).tickSize(-width).ticks(6).tickFormat(""));
+  g.append("g").attr("class","x-grid")
+    .attr("transform",`translate(0,${height})`)
+    .call(d3.axisBottom(x).tickSize(-height).ticks(7).tickFormat(""));
+
+  g.append("g").attr("class","axis").call(d3.axisLeft(y).ticks(7));
+  g.append("g").attr("class","axis")
+    .attr("transform",`translate(0,${height})`)
+    .call(d3.axisBottom(x).ticks(7));
+
+  g.append("rect")
+    .attr("x",0).attr("y",0).attr("width",width).attr("height",height)
+    .attr("fill","none").attr("stroke","#666").attr("stroke-width",2);
+
+  // Titles
+  root.append("text").attr("class","chart-title")
+    .attr("x", margin.left + width/2).attr("y", margin.top - 35)
+    .text("Probability Density Functions");
+  g.append("text").attr("class","ylabel")
+    .attr("transform","rotate(-90)")
+    .attr("x", -height/2).attr("y", -50)
+    .attr("text-anchor","middle")
+    .text("Probability Density");
+  g.append("text").attr("class","xlabel")
+    .attr("x", width/2).attr("y", height+50)
+    .attr("text-anchor","middle").text("x");
+
+  // PDFs
+  const gau = (xv,m,s)=> (1/(s*Math.sqrt(2*Math.PI))) * Math.exp(-0.5*((xv-m)/s)**2);
+
+  // Yellow: 分段 + 高斯拼接，保证在折点连续
+  const x_start = -1.35, x_end = -0.95, y_end = 0.195;
+  const mu0 = 0.0, sigma0 = 1.55;
+  const A0  = y_end / gau(x_end, mu0, sigma0);
+  function f0(t){
+    if (t < x_start) return 0;
+    if (t <= x_end){
+      return y_end * (t - x_start) / (x_end - x_start);
+    }
+    return A0 * gau(t, mu0, sigma0);
+  }
+
+  // Blue: 高斯（缩放到峰值 ~0.245）
+  const mu1 = 2.0, sigma1 = 0.85, bluePeak = 0.245;
+  const A1   = bluePeak * sigma1 * Math.sqrt(2*Math.PI);
+  const f1   = t => A1 * gau(t, mu1, sigma1);
+
+  // Dashed verticals around x=1
+  const tL = 0.95, tR = 1.60;
+
+  // Sample & curves
+  const XS = d3.range(-2, 5.0001, 0.02);
+  const D0 = XS.map(t=>({x:t,y:f0(t)}));
+  const D1 = XS.map(t=>({x:t,y:f1(t)}));
+
+  const line = d3.line().x(d=>x(d.x)).y(d=>y(d.y)).curve(d3.curveCatmullRom.alpha(0.5));
+
+  function drawCurve(data, cls){
+    const p = g.append("path").attr("class","curve "+cls).attr("d", line(data));
+    const len = p.node().getTotalLength();
+    p.attr("stroke-dasharray",`${len} ${len}`).attr("stroke-dashoffset",len)
+     .transition().duration(1200).ease(d3.easeCubicOut)
+     .attr("stroke-dashoffset",0);
+  }
+  drawCurve(D0,"gold");
+  drawCurve(D1,"teal");
+
+  // Shading: blue (x<=tR) + yellow (x>=tL) + overlap darker
+  const blueShade = d3.range(-2, tR+1e-6, 0.02).map(xx=>({x:xx, y:f1(xx)}));
+  const goldShade = d3.range(tL, 5+1e-6, 0.02).map(xx=>({x:xx, y:f0(xx)}));
+  const overlap   = d3.range(tL, tR+1e-6, 0.02).map(xx=>({x:xx, y:Math.min(f0(xx),f1(xx))}));
+
+  const area = d3.area().x(d=>x(d.x)).y0(y(0)).y1(d=>y(d.y)).curve(d3.curveLinear);
+  g.append("path").attr("class","shade").attr("d", area(blueShade))
+    .style("opacity",0).transition().duration(500).delay(350).style("opacity",.45);
+  g.append("path").attr("class","shade").attr("d", area(goldShade))
+    .style("opacity",0).transition().duration(500).delay(350).style("opacity",.45);
+  g.append("path").attr("class","overlap").attr("d", area(overlap))
+    .style("opacity",0).transition().duration(500).delay(600).style("opacity",.35);
+
+  // Vertical dashed lines
+  [tL,tR].forEach((tx,i)=>{
+    g.append("line").attr("class","vline")
+      .attr("x1",x(tx)).attr("x2",x(tx)).attr("y1",y(0)).attr("y2",y(0))
+      .transition().duration(900).delay(300+i*120).ease(d3.easeCubicOut)
+      .attr("y2",y(0.34));
+  });
+
+  // Legend（放在右上，text-anchor=end；行线条尽量短，减少无谓外扩）
+  const legend = g.append("g").attr("class","legend")
+    .attr("transform",`translate(${width-16},12)`).attr("text-anchor","end");
+  const items = [
+    {c:"#e3b647", html:'p(<tspan font-style="italic">x</tspan>, <tspan font-weight="bold" font-style="italic">y</tspan> = 0) · <tspan font-style="italic">v</tspan>(<tspan font-style="italic">x</tspan>)'},
+    {c:"#2f7f86", html:'p(<tspan font-style="italic">x</tspan>, <tspan font-weight="bold" font-style="italic">y</tspan> = 1) · <tspan font-style="italic">v</tspan>(<tspan font-style="italic">x</tspan>)'}
+  ];
+  const lg = legend.selectAll("g").data(items).enter().append("g")
+    .attr("transform",(d,i)=>`translate(0,${i*26})`);
+  lg.append("line").attr("x1",-90).attr("x2",-58).attr("y1",0).attr("y2",0).attr("stroke",d=>d.c);
+  lg.append("text").attr("x",-100).attr("y",5).html(d=>d.html);
+
+  // ================== 交互：十字线 + 跟随圆点 + Tooltip ==================
+  const overlay = g.append("rect")
+    .attr("x",0).attr("y",0).attr("width",width).attr("height",height)
+    .style("fill","none").style("pointer-events","all");
+
+  const cross = g.append("line").attr("class","crosshair")
+    .attr("y1",0).attr("y2",height).style("opacity",0);
+
+  const dot0 = g.append("circle").attr("class","dot dot-gold").attr("r",4).style("opacity",0);
+  const dot1 = g.append("circle").attr("class","dot dot-teal").attr("r",4).style("opacity",0);
+
+  const tooltip = d3.select("#tooltip");
+
+  overlay.on("mousemove", function(event){
+    let xm = x.invert(d3.pointer(event, this)[0]);
+    xm = Math.max(-2, Math.min(5, xm));
+    const y0 = f0(xm), y1 = f1(xm);
+
+    cross.attr("x1",x(xm)).attr("x2",x(xm)).style("opacity",1);
+    dot0.attr("cx",x(xm)).attr("cy",y(y0)).style("opacity",1);
+    dot1.attr("cx",x(xm)).attr("cy",y(y1)).style("opacity",1);
+
+    tooltip.style("opacity",1)
+      .html(
+        `<strong>x = ${xm.toFixed(2)}</strong><br/>
+         <span style="color:#e3b647">p(x,y=0)·v(x) = ${y0.toFixed(4)}</span><br/>
+         <span style="color:#2f7f86">p(x,y=1)·v(x) = ${y1.toFixed(4)}</span>`
+      )
+      .style("left",(event.pageX + 10) + "px")
+      .style("top", (event.pageY - 28) + "px");
+  }).on("mouseleave", function(){
+    cross.style("opacity",0);
+    dot0.style("opacity",0);
+    dot1.style("opacity",0);
+    tooltip.style("opacity",0);
+  });
+})();
+</script>
+
+<!-- ▼▼▼ 方案B：子页内“更强自适应补丁”（考虑字体时机/描边/端点），解决裁切与溢出 ▼▼▼ -->
+<script>
+(function(){
+  const PAD   = 48; // 外沿安全留白更大，避免边缘元素看起来“顶边”
+  const EXTRA = 16; // 针对箭头/端点/描边等的额外冗余
+
+  function num(v){ const n = parseFloat(v); return isNaN(n)?0:n; }
+
+  function measureUnion(svg){
+    let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+    const nodes = svg.querySelectorAll('*');
+    for (let i=0;i<nodes.length;i++){
+      const el = nodes[i];
+      if (typeof el.getBBox !== 'function') continue;
+      try{
+        const b = el.getBBox();
+        if (!isFinite(b.width) && !isFinite(b.height)) continue;
+
+        // 把描边粗细也算进去（getBBox 不含 stroke）
+        let halfStroke = 0;
+        try {
+          const sw = getComputedStyle(el).strokeWidth;
+          halfStroke = num(sw) / 2;
+        } catch(e){}
+
+        // 为 marker-end / 端点等再加点冗余
+        const fudge = halfStroke + EXTRA;
+
+        minX = Math.min(minX, b.x - fudge);
+        minY = Math.min(minY, b.y - fudge);
+        maxX = Math.max(maxX, b.x + b.width  + fudge);
+        maxY = Math.max(maxY, b.y + b.height + fudge);
+      }catch(e){}
+    }
+    if (minX === Infinity) return null;
+
+    return {
+      x: Math.floor(minX - PAD),
+      y: Math.floor(minY - PAD),
+      w: Math.ceil((maxX - minX) + 2*PAD),
+      h: Math.ceil((maxY - minY) + 2*PAD)
+    };
+  }
+
+  function applyFit(svg){
+    try{
+      // 若有 clip-path 容易“吃掉”文字/轴，这里统一放开
+      svg.querySelectorAll('[clip-path]').forEach(el => el.removeAttribute('clip-path'));
+      svg.querySelectorAll('clipPath rect').forEach(r => {
+        r.setAttribute('width','100000'); r.setAttribute('height','100000');
+      });
+
+      const box = measureUnion(svg);
+      if (!box) return;
+
+      svg.setAttribute('viewBox', `${box.x} ${box.y} ${box.w} ${box.h}`);
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      svg.style.width   = '100%';
+      svg.style.height  = 'auto';
+      svg.style.overflow= 'visible';
+    }catch(e){}
+  }
+
+  function run(){
+    document.querySelectorAll('svg').forEach(applyFit);
+  }
+
+  // 等字体加载完再量，避免文本换行/度量不准
+  function schedule(){
+    if (document.fonts && document.fonts.ready){
+      document.fonts.ready.then(()=>{
+        run();
+        setTimeout(run, 200);
+        setTimeout(run, 600);
+      });
+    } else {
+      run();
+      setTimeout(run, 200);
+      setTimeout(run, 600);
+    }
+  }
+
+  if (document.readyState === 'complete') schedule();
+  else window.addEventListener('load', schedule);
+})();
+</script>
+<!-- ▲▲▲ 自适应补丁结束 ▲▲▲ -->
+
+</body>
+</html>

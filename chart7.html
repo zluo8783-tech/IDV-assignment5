@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Chart 7 (Venn) – Equal overlaps</title>
+<style>
+  body{margin:0;padding:24px;background:#e3eded;font-family:Georgia,serif;display:flex;justify-content:center}
+  .card{background:#fff;width:980px;padding:28px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  h1{margin:0 0 12px 8px;font-weight:500;color:#222}
+  svg{display:block}
+
+  .circle{stroke:#555;stroke-width:1.5px}
+  .delete{fill:#bdb4e8}
+  .replace{fill:#b8adb9}
+  .rewrite{fill:#ead89e}
+  .region{font-size:34px;font-weight:600;fill:#333;cursor:pointer}
+  .set-label{font-size:22px}
+  .overlay{fill:#666;opacity:.30;pointer-events:none}
+  .fade{opacity:.18}
+  .tooltip{
+    position:absolute;background:rgba(0,0,0,.85);color:#fff;padding:6px 10px;border-radius:8px;
+    font-size:13px;line-height:1.25;pointer-events:none;opacity:0;transition:opacity .12s;transform:translate(10px,-10px)
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Chart 7 (Venn)</h1>
+    <!-- 初始固定尺寸；下方补丁会自动改为 viewBox+自适应，避免裁切与溢出 -->
+    <svg id="venn" width="920" height="560"></svg>
+  </div>
+  <div id="tip" class="tooltip"></div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+(function(){
+  const svg = d3.select("#venn"),
+        W = +svg.attr("width"),
+        H = +svg.attr("height");
+
+  const g = svg.append("g").attr("transform","translate(0,10)");
+  const baseOpacity = 0.55;
+
+  // 三圆：半径相同、两两距离一致（等边三角形布置）
+  const r = 170;
+  const A = { id:"A", name:"Delete",  cx:390, cy:360, r, cls:"delete"  };
+  const B = { id:"B", name:"Replace", cx:500, cy:170, r, cls:"replace" }; // 顶部
+  const C = { id:"C", name:"Rewrite", cx:610, cy:360, r, cls:"rewrite" };
+  const sets = [A,B,C];
+
+  // 圆
+  const gCircles = g.append("g").attr("class","circles");
+  gCircles.selectAll("circle")
+    .data(sets).enter().append("circle")
+      .attr("class", d=>`circle ${d.cls}`)
+      .attr("cx", d=>d.cx).attr("cy", d=>d.cy).attr("r", d=>d.r)
+      .attr("opacity",0)
+      .attr("transform", d=>`translate(${d.cx},${d.cy}) scale(0) translate(${-d.cx},${-d.cy})`)
+      .transition().duration(900).ease(d3.easeCubicOut)
+      .attr("opacity", baseOpacity)
+      .attr("transform", "none");
+
+  // —— 标签都在圆外；为顶部标签设置最小 y，避免跑出画布 —— //
+  const minTopY = 32; // 顶部最小 y（像素）
+  g.append("text").attr("class","set-label")
+    .attr("x", A.cx - A.r - 46).attr("y", A.cy + 18).attr("text-anchor","start")
+    .text("Delete");
+  g.append("text").attr("class","set-label")
+    .attr("x", B.cx)
+    .attr("y", Math.max(minTopY, B.cy - B.r - 18))  // 关键保护：标题不上顶裁切
+    .attr("text-anchor","middle")
+    .text("Replace");
+  g.append("text").attr("class","set-label")
+    .attr("x", C.cx + C.r + 46).attr("y", C.cy + 18).attr("text-anchor","end")
+    .text("Rewrite");
+
+  // mask（用于交集高亮）
+  const defs = svg.append("defs");
+  function addMask(id, cx, cy, r){
+    const m = defs.append("mask").attr("id", id);
+    m.append("rect").attr("x",0).attr("y",0).attr("width",W).attr("height",H).attr("fill","black");
+    m.append("circle").attr("cx",cx).attr("cy",cy).attr("r",r).attr("fill","white");
+  }
+  addMask("maskA", A.cx, A.cy, A.r);
+  addMask("maskB", B.cx, B.cy, B.r);
+  addMask("maskC", C.cx, C.cy, C.r);
+
+  // 罗马数字位置（已按当前圆心微调）
+  const regions = [
+    {label:"Ⅰ", sets:["A"],        x: A.cx-95, y: A.cy+25,  desc:"Delete"},
+    {label:"Ⅱ", sets:["B"],        x: B.cx,    y: B.cy-5,   desc:"Replace"},
+    {label:"Ⅲ", sets:["C"],        x: C.cx+95, y: C.cy+25,  desc:"Rewrite"},
+    {label:"Ⅳ", sets:["A","B"],    x: (A.cx+B.cx)/2 - 20, y: (A.cy+B.cy)/2 + 5,  desc:"Delete ∩ Replace"},
+    {label:"Ⅴ", sets:["B","C"],    x: (B.cx+C.cx)/2 + 20, y: (B.cy+C.cy)/2 + 5,  desc:"Replace ∩ Rewrite"},
+    {label:"Ⅵ", sets:["A","C"],    x: (A.cx+C.cx)/2 + 10, y: (A.cy+C.cy)/2 + 45, desc:"Delete ∩ Rewrite"},
+    {label:"Ⅶ", sets:["A","B","C"],x: (A.cx+B.cx+C.cx)/3, y: (A.cy+B.cy+C.cy)/3 + 10, desc:"Triple overlap"},
+  ];
+
+  const gNums = g.append("g").attr("class","nums");
+  gNums.selectAll("text")
+    .data(regions).enter().append("text")
+      .attr("class","region")
+      .attr("x", d=>d.x).attr("y", d=>d.y).attr("text-anchor","middle")
+      .text(d=>d.label).attr("opacity",0)
+      .transition().duration(600).delay(300).attr("opacity",1);
+
+  const overlay = g.append("g").attr("class","overlay-holder");
+  const tip = d3.select("#tip");
+
+  // 悬停罗马数字：高亮对应交集（其余变淡）
+  gNums.selectAll("text")
+    .on("mousemove", function(event, d){
+      const active = new Set(d.sets);
+      gCircles.selectAll("circle").attr("class", c=>{
+        const cls = `circle ${c.cls}`; return active.has(c.id) ? cls : cls + " fade";
+      });
+      overlay.selectAll("*").remove();
+
+      if(d.sets.length >= 2){
+        const gMask = overlay.append("g").attr("mask", `url(#mask${d.sets[0]})`);
+        if(d.sets.length === 2){
+          const target = d.sets[1]==="A"?A : d.sets[1]==="B"?B : C;
+          gMask.append("circle")
+            .attr("cx",target.cx).attr("cy",target.cy).attr("r",target.r)
+            .attr("class","overlay").attr("opacity",0)
+            .transition().duration(180).attr("opacity",.30);
+        }else{
+          const t1 = d.sets[1]==="A"?A : d.sets[1]==="B"?B : C;
+          gMask.append("circle")
+            .attr("cx",t1.cx).attr("cy",t1.cy).attr("r",t1.r)
+            .attr("mask", `url(#mask${d.sets[2]})`)
+            .attr("class","overlay").attr("opacity",0)
+            .transition().duration(180).attr("opacity",.30);
+        }
+      }
+      tip.style("opacity",1).html(`${d.label} : ${d.desc}`)
+         .style("left",(event.pageX+12)+"px")
+         .style("top",(event.pageY-12)+"px");
+    })
+    .on("mouseleave", ()=>{
+      gCircles.selectAll("circle").attr("class", c=>`circle ${c.cls}`).attr("opacity",baseOpacity);
+      overlay.selectAll("*").remove();
+      tip.style("opacity",0);
+    });
+})();
+</script>
+
+<!-- ▼▼▼ 方案B：子页内“自适应补丁”（关键新增，解决裁切与溢出） ▼▼▼ -->
+<script>
+(function(){
+  const PAD = 24; // 安全留白，避免标题/描边贴边后看起来被吃掉
+
+  function fixSVG(svg){
+    try{
+      // 若页面里还有 clip-path 剪裁，会导致文字/轴被切掉；这里移除以确保视域完整
+      svg.querySelectorAll('[clip-path]').forEach(el => el.removeAttribute('clip-path'));
+      svg.querySelectorAll('clipPath rect').forEach(r => {
+        r.setAttribute('width','100000'); r.setAttribute('height','100000');
+      });
+
+      // 计算所有元素的并集外接矩形（包含 text/circle/path 等）
+      let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+      const nodes = svg.querySelectorAll('*');
+      for(let i=0;i<nodes.length;i++){
+        const el = nodes[i];
+        if(typeof el.getBBox === 'function'){
+          try{
+            const b = el.getBBox();
+            if(!isFinite(b.width) || !isFinite(b.height)) continue;
+            minX = Math.min(minX, b.x);
+            minY = Math.min(minY, b.y);
+            maxX = Math.max(maxX, b.x + b.width);
+            maxY = Math.max(maxY, b.y + b.height);
+          }catch(e){}
+        }
+      }
+      if(minX === Infinity) return; // 没有可测元素则跳过
+
+      const vbX = Math.floor(minX - PAD);
+      const vbY = Math.floor(minY - PAD);
+      const vbW = Math.ceil((maxX - minX) + 2*PAD);
+      const vbH = Math.ceil((maxY - minY) + 2*PAD);
+
+      // 关键：viewBox 包住所有要素；移除固定宽高，交给容器宽度自适应，避免超出
+      svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      svg.style.width = '100%';
+      svg.style.height = 'auto';
+      svg.style.overflow = 'visible';
+    }catch(e){}
+  }
+
+  function fixCanvas(c){
+    c.style.maxWidth = '100%';
+    c.style.height = 'auto';
+    c.style.display = 'block';
+  }
+
+  function run(){
+    // 轻量归一化，稳定盒模型；不改变你原有布局
+    const st = document.createElement('style');
+    st.textContent = '*,*:before,*:after{box-sizing:border-box}';
+    document.head && document.head.appendChild(st);
+
+    document.querySelectorAll('svg').forEach(fixSVG);
+    document.querySelectorAll('canvas').forEach(fixCanvas);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', run);
+  }else{
+    run();
+  }
+})();
+</script>
+<!-- ▲▲▲ 方案B补丁结束 ▲▲▲ -->
+
+</body>
+</html>

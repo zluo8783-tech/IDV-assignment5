@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IDV Assignment 4 · Robustness Visualization</title>
+
+  <!-- D3.js library -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <style>
+    /* Global layout & typography */
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, Helvetica, Arial, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 24px auto 48px;
+      padding: 0 16px;
+    }
+
+    header {
+      margin-bottom: 24px;
+    }
+
+    header h1 {
+      font-size: 24px;
+      margin: 0 0 8px;
+    }
+
+    header p {
+      margin: 0;
+      font-size: 14px;
+      color: #4b5563;
+    }
+
+    .chart-card {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      padding: 20px 20px 24px;
+      margin-bottom: 24px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .chart-card h2 {
+      font-size: 18px;
+      margin: 0 0 8px;
+    }
+
+    .chart-card .description {
+      font-size: 13px;
+      color: #6b7280;
+      margin: 4px 0 16px;
+    }
+
+    .card-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 16px;
+      font-size: 13px;
+    }
+
+    .controls label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    select {
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      background: #f9fafb;
+      font-size: 13px;
+      outline: none;
+    }
+
+    select:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.4);
+      background: #ffffff;
+    }
+
+    .current-metric {
+      font-size: 13px;
+      color: #4b5563;
+    }
+
+    .current-metric span {
+      font-weight: 600;
+      color: #111827;
+    }
+
+    svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .axis-label {
+      font-size: 12px;
+      fill: #374151;
+    }
+
+    .legend-title {
+      font-size: 12px;
+      fill: #374151;
+    }
+
+    .legend text {
+      fill: #374151;
+    }
+
+    .bar {
+      cursor: pointer;
+    }
+
+    .bar:hover {
+      opacity: 0.85;
+    }
+
+    /* Tooltip for heatmap */
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 8px 10px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.18);
+      border: 1px solid #e5e7eb;
+      font-size: 12px;
+      color: #111827;
+      line-height: 1.4;
+      z-index: 999;
+    }
+
+    .tooltip strong {
+      font-weight: 600;
+    }
+
+    /* Axis styles (optional subtle tuning) */
+    .x-axis text,
+    .y-axis text {
+      font-size: 11px;
+      fill: #374151;
+    }
+
+    .x-axis path,
+    .x-axis line,
+    .y-axis path,
+    .y-axis line {
+      stroke: #d1d5db;
+    }
+
+    @media (max-width: 768px) {
+      header h1 {
+        font-size: 20px;
+      }
+      .chart-card {
+        padding: 16px;
+      }
+      .card-header {
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <header>
+      <h1>Robust Training & Attacks · Interactive Visualization</h1>
+      <p>
+        Data from <code>data_1.json</code> (groups of data) and
+        <code>data_2.json</code> (lots of data).
+      </p>
+    </header>
+
+    <!-- Chart 1: data_1.json -->
+    <section class="chart-card">
+      <div class="card-header">
+        <div>
+          <h2>Chart 1 · Methods vs. Datasets (data_1)</h2>
+          <p class="description">
+            Grouped bar chart: for each dataset, compare robust training methods
+            under a selected metric.
+          </p>
+        </div>
+        <div class="controls">
+          <label for="metric-select">
+            Metric:
+            <select id="metric-select"></select>
+          </label>
+          <div class="current-metric">
+            Current metric: <span id="metric-caption"></span>
+          </div>
+        </div>
+      </div>
+
+      <svg id="chart1"></svg>
+    </section>
+
+    <!-- Chart 2: data_2.json -->
+    <section class="chart-card">
+      <div class="card-header">
+        <div>
+          <h2>Chart 2 · Attacks vs. Defense Methods (data_2)</h2>
+          <p class="description">
+            Heatmap: each cell shows the accuracy (%) of one training method
+            under one attack. Hover to see exact values.
+          </p>
+        </div>
+      </div>
+
+      <svg id="chart2"></svg>
+    </section>
+  </div>
+
+  <script>
+    // Load both JSON files and render charts
+    Promise.all([
+      d3.json("data_1.json"), // groups of data
+      d3.json("data_2.json"), // lots of data
+    ])
+      .then(([data1, data2]) => {
+        renderData1Chart(data1);
+        renderData2Chart(data2);
+      })
+      .catch((error) => {
+        console.error("Error loading JSON files:", error);
+      });
+
+    // -----------------------------
+    // Chart 1 · data_1.json
+    // -----------------------------
+    function renderData1Chart(raw) {
+      const svg = d3.select("#chart1");
+
+      const margin = { top: 60, right: 20, bottom: 80, left: 60 };
+      const fullWidth = 900;
+      const fullHeight = 420;
+      const width = fullWidth - margin.left - margin.right;
+      const height = fullHeight - margin.top - margin.bottom;
+
+      svg.attr("viewBox", `0 0 ${fullWidth} ${fullHeight}`);
+
+      const chartG = svg
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const methods = Object.keys(raw);
+      const metricSet = new Set();
+      const datasetSet = new Set();
+
+      // Collect all metric names and dataset names
+      methods.forEach((method) => {
+        const metricsObj = raw[method];
+        Object.keys(metricsObj).forEach((metric) => {
+          metricSet.add(metric);
+          const datasetsObj = metricsObj[metric];
+          Object.keys(datasetsObj).forEach((ds) => datasetSet.add(ds));
+        });
+      });
+
+      const metrics = Array.from(metricSet);
+      const datasets = Array.from(datasetSet);
+
+      // Flatten data into: {method, dataset, metric, value}
+      const dataByMetric = {};
+      metrics.forEach((metric) => {
+        const arr = [];
+        methods.forEach((method) => {
+          const datasetsObj = raw[method][metric];
+          Object.keys(datasetsObj).forEach((ds) => {
+            arr.push({
+              method: method,
+              dataset: ds,
+              metric: metric,
+              value: +datasetsObj[ds],
+            });
+          });
+        });
+        dataByMetric[metric] = arr;
+      });
+
+      const x0 = d3
+        .scaleBand()
+        .domain(datasets)
+        .range([0, width])
+        .paddingInner(0.1);
+
+      const x1 = d3
+        .scaleBand()
+        .domain(methods)
+        .range([0, x0.bandwidth()])
+        .padding(0.05);
+
+      const color = d3
+        .scaleOrdinal()
+        .domain(methods)
+        .range(d3.schemeCategory10);
+
+      const xAxisG = chartG
+        .append("g")
+        .attr("class", "x-axis")
+        .attr("transform", `translate(0,${height})`);
+
+      const yAxisG = chartG.append("g").attr("class", "y-axis");
+
+      // Axis labels
+      chartG
+        .append("text")
+        .attr("class", "axis-label")
+        .attr("x", width / 2)
+        .attr("y", height + 60)
+        .attr("text-anchor", "middle")
+        .text("Dataset");
+
+      chartG
+        .append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -45)
+        .attr("text-anchor", "middle")
+        .text("Value (%)");
+
+      // Legend for methods
+      const legend = svg
+        .append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(${margin.left},${18})`);
+
+      const legendItem = legend
+        .selectAll(".legend-item")
+        .data(methods)
+        .enter()
+        .append("g")
+        .attr("class", "legend-item")
+        .attr("transform", (d, i) => `translate(${i * 80},0)`);
+
+      legendItem
+        .append("rect")
+        .attr("width", 12)
+        .attr("height", 12)
+        .attr("rx", 2)
+        .attr("ry", 2)
+        .attr("fill", (d) => color(d));
+
+      legendItem
+        .append("text")
+        .attr("x", 18)
+        .attr("y", 10)
+        .attr("font-size", 11)
+        .text((d) => d);
+
+      // One group per dataset on the x-axis
+      const datasetGroups = chartG
+        .selectAll(".dataset-group")
+        .data(datasets)
+        .enter()
+        .append("g")
+        .attr("class", "dataset-group")
+        .attr("transform", (d) => `translate(${x0(d)},0)`);
+
+      function update(metricName, isFirstTime) {
+        const data = dataByMetric[metricName];
+
+        const y = d3
+          .scaleLinear()
+          .domain([0, d3.max(data, (d) => d.value) * 1.05])
+          .nice()
+          .range([height, 0]);
+
+        // Update axes (no transition needed here)
+        yAxisG.call(d3.axisLeft(y).ticks(6));
+        xAxisG.call(d3.axisBottom(x0));
+
+        xAxisG
+          .selectAll("text")
+          .attr("transform", "rotate(-30)")
+          .style("text-anchor", "end");
+
+        const t = d3.transition().duration(isFirstTime ? 800 : 600);
+
+        // For each dataset group, bind bars for methods
+        datasetGroups.each(function (dataset) {
+          const group = d3.select(this);
+          const datasetData = data.filter((d) => d.dataset === dataset);
+
+          const bars = group
+            .selectAll("rect.bar")
+            .data(datasetData, (d) => d.method);
+
+          const barsEnter = bars
+            .enter()
+            .append("rect")
+            .attr("class", "bar")
+            .attr("x", (d) => x1(d.method))
+            .attr("width", x1.bandwidth())
+            .attr("y", height) // start from bottom
+            .attr("height", 0)
+            .attr("fill", (d) => color(d.method));
+
+          bars
+            .merge(barsEnter)
+            .transition(t)
+            .attr("x", (d) => x1(d.method))
+            .attr("width", x1.bandwidth())
+            .attr("y", (d) => y(d.value))
+            .attr("height", (d) => height - y(d.value));
+
+          bars
+            .exit()
+            .transition(t)
+            .attr("y", height)
+            .attr("height", 0)
+            .remove();
+        });
+
+        // Update caption text
+        d3.select("#metric-caption").text(metricName);
+      }
+
+      // Fill metric dropdown
+      const metricSelect = d3.select("#metric-select");
+      metricSelect
+        .selectAll("option")
+        .data(metrics)
+        .enter()
+        .append("option")
+        .attr("value", (d) => d)
+        .text((d) => d);
+
+      const defaultMetric = metrics[0];
+      metricSelect.property("value", defaultMetric);
+
+      // Initial render with automatic transition (non-interaction-triggered)
+      update(defaultMetric, true);
+
+      // User-triggered interaction: change metric
+      metricSelect.on("change", (event) => {
+        const metric = event.target.value;
+        update(metric, false);
+      });
+    }
+
+    // -----------------------------
+    // Chart 2 · data_2.json
+    // -----------------------------
+    function renderData2Chart(raw) {
+      const svg = d3.select("#chart2");
+
+      const margin = { top: 90, right: 20, bottom: 90, left: 170 };
+      const fullWidth = 900;
+      const fullHeight = 560;
+      const width = fullWidth - margin.left - margin.right;
+      const height = fullHeight - margin.top - margin.bottom;
+
+      svg.attr("viewBox", `0 0 ${fullWidth} ${fullHeight}`);
+
+      const chartG = svg
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const attacks = Object.keys(raw);
+      const methodSet = new Set();
+
+      attacks.forEach((attack) => {
+        Object.keys(raw[attack]).forEach((m) => methodSet.add(m));
+      });
+
+      const methods = Array.from(methodSet);
+
+      const data = [];
+      attacks.forEach((attack) => {
+        methods.forEach((method) => {
+          const v = raw[attack][method];
+          if (v !== undefined && v !== null) {
+            data.push({
+              attack: attack,
+              method: method,
+              value: +v,
+            });
+          }
+        });
+      });
+
+      const x = d3
+        .scaleBand()
+        .domain(methods)
+        .range([0, width])
+        .padding(0.05);
+
+      const y = d3
+        .scaleBand()
+        .domain(attacks)
+        .range([0, height])
+        .padding(0.05);
+
+      // Values are in percentage, roughly [0, 100]
+      const color = d3
+        .scaleLinear()
+        .domain([0, 100])
+        .range(["#f7fbff", "#08306b"]);
+
+      const xAxisG = chartG
+        .append("g")
+        .attr("class", "x-axis")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x));
+
+      xAxisG
+        .selectAll("text")
+        .attr("transform", "rotate(-40)")
+        .style("text-anchor", "end");
+
+      const yAxisG = chartG.append("g").attr("class", "y-axis").call(
+        d3.axisLeft(y)
+      );
+
+      // Axis labels
+      chartG
+        .append("text")
+        .attr("class", "axis-label")
+        .attr("x", width / 2)
+        .attr("y", height + 70)
+        .attr("text-anchor", "middle")
+        .text("Training / Defense method");
+
+      chartG
+        .append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -135)
+        .attr("text-anchor", "middle")
+        .text("Attack method");
+
+      // Tooltip (user-triggered interaction)
+      const tooltip = d3
+        .select("body")
+        .append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0);
+
+      const cells = chartG
+        .selectAll("rect.cell")
+        .data(data)
+        .enter()
+        .append("rect")
+        .attr("class", "cell")
+        .attr("x", (d) => x(d.method))
+        .attr("y", (d) => y(d.attack))
+        .attr("width", x.bandwidth())
+        .attr("height", y.bandwidth())
+        .attr("fill", (d) => color(d.value))
+        .attr("opacity", 0); // start hidden for load animation
+
+      // Non-interaction-triggered transition: fade in all cells
+      cells
+        .transition()
+        .delay((d, i) => i * 5)
+        .duration(500)
+        .attr("opacity", 1);
+
+      cells
+        .on("mouseover", function (event, d) {
+          d3.select(this).attr("stroke", "#111827").attr("stroke-width", 1.5);
+
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<div><strong>Attack:</strong> ${d.attack}</div>
+               <div><strong>Defense:</strong> ${d.method}</div>
+               <div><strong>Accuracy:</strong> ${d.value.toFixed(2)}%</div>`
+            );
+        })
+        .on("mousemove", function (event) {
+          tooltip
+            .style("left", event.pageX + 12 + "px")
+            .style("top", event.pageY - 28 + "px");
+        })
+        .on("mouseleave", function () {
+          d3.select(this).attr("stroke", "none");
+
+          tooltip.style("opacity", 0);
+        });
+
+      // Color legend (gradient bar for accuracy scale)
+      const legendWidth = 260;
+      const legendHeight = 10;
+
+      const defs = svg.append("defs");
+
+      const linearGradient = defs
+        .append("linearGradient")
+        .attr("id", "heatmap-gradient")
+        .attr("x1", "0%")
+        .attr("y1", "0%")
+        .attr("x2", "100%")
+        .attr("y2", "0%");
+
+      linearGradient
+        .append("stop")
+        .attr("offset", "0%")
+        .attr("stop-color", color(0));
+
+      linearGradient
+        .append("stop")
+        .attr("offset", "100%")
+        .attr("stop-color", color(100));
+
+      const legend = svg
+        .append("g")
+        .attr("class", "color-legend")
+        .attr(
+          "transform",
+          `translate(${margin.left + width - legendWidth},${24})`
+        );
+
+      legend
+        .append("rect")
+        .attr("width", legendWidth)
+        .attr("height", legendHeight)
+        .attr("fill", "url(#heatmap-gradient)");
+
+      const legendScale = d3
+        .scaleLinear()
+        .domain([0, 100])
+        .range([0, legendWidth]);
+
+      const legendAxis = d3
+        .axisBottom(legendScale)
+        .ticks(5)
+        .tickFormat((d) => d + "%");
+
+      legend
+        .append("g")
+        .attr("transform", `translate(0,${legendHeight})`)
+        .call(legendAxis);
+
+      legend
+        .append("text")
+        .attr("x", legendWidth / 2)
+        .attr("y", -6)
+        .attr("text-anchor", "middle")
+        .attr("class", "legend-title")
+        .text("Accuracy");
+    }
+  </script>
+</body>
+</html>

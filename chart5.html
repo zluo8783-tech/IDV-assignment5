@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chart 5 (math plots) – D3</title>
+<style>
+  body{background:#dfe9e9;margin:0;padding:24px;font-family:Georgia,serif;display:flex;justify-content:center}
+  .card{background:#fff;width:980px;padding:28px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  h1{margin:0 0 12px 8px;font-weight:500;color:#222}
+  svg{display:block}
+
+  .axis-heavy{stroke:#222;stroke-width:3px;fill:none;shape-rendering:crispEdges}
+  .tick-short{stroke:#222;stroke-width:2px}
+  .tick-short-h{stroke:#222;stroke-width:2px} /* 新增：y 轴上的水平短刻度 */
+  .label{font-size:18px}
+  .math-italic{font-style:italic}
+
+  /* 左图 */
+  .base-fill{fill:#cbbce3;opacity:.55}
+  .box-fill{fill:#c0addf;opacity:.45}
+  .box-dash{fill:none;stroke:#6d5a9f;stroke-width:2.5px;stroke-dasharray:6 6}
+  .move-arrow{stroke:#6d5a9f;stroke-width:2.5px;fill:none}
+  .axis-arrow{marker-end:url(#arrowHead)}
+
+  /* 右图 */
+  .curve{fill:none;stroke-width:3.2px;pointer-events:none}
+  .curve-solid{stroke:#3b845c}
+  .curve-dash{stroke:#b7d7b7;stroke-dasharray:10 8}
+  .tooltip{position:absolute;background:rgba(0,0,0,.85);color:#fff;padding:8px 10px;border-radius:8px;
+           font-size:13px;line-height:1.25;pointer-events:none;opacity:0;transition:opacity .15s;transform:translate(10px,-12px)}
+  .crosshair{stroke:#999;stroke-dasharray:4 4}
+  .dot{fill:#fff;stroke-width:2px;pointer-events:none}
+  .dot-green{stroke:#3b845c}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Chart 5 (math plots)</h1>
+    <svg id="chart5" width="920" height="520"></svg>
+  </div>
+  <div id="tooltip" class="tooltip"></div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+(function(){
+  const root = d3.select("#chart5"),
+        W = +root.attr("width"),
+        H = +root.attr("height"),
+        margin = {top:60,right:30,bottom:60,left:30},
+        innerW = W - margin.left - margin.right,
+        innerH = H - margin.top  - margin.bottom;
+
+  const g = root.append("g").attr("transform",`translate(${margin.left},${margin.top})`);
+
+  const pad = 30;
+  const left  = {x:0,               y:10, w:(innerW/2)-pad, h:innerH-20};
+  const right = {x:(innerW/2)+pad,  y:10, w:(innerW/2)-pad, h:innerH-20};
+
+  /* ================= 左图 ================= */
+  const gL = g.append("g").attr("transform",`translate(${left.x},${left.y})`);
+  const xL = d3.scaleLinear().domain([0,1]).range([0,left.w-30]);
+  const yL = d3.scaleLinear().domain([0,1]).range([left.h-20,10]);
+
+  // 箭头
+  root.append("defs").append("marker")
+      .attr("id","arrowHead").attr("viewBox","0 0 10 10")
+      .attr("refX",9).attr("refY",5).attr("markerWidth",8).attr("markerHeight",8)
+      .attr("orient","auto-start-reverse")
+      .append("path").attr("d","M 0 0 L 10 5 L 0 10 z").attr("fill","#222");
+
+  // 坐标轴
+  gL.append("line").attr("class","axis-heavy axis-arrow")
+     .attr("x1",xL(0)).attr("y1",yL(0)).attr("x2",xL(1)).attr("y2",yL(0));
+  gL.append("line").attr("class","axis-heavy axis-arrow")
+     .attr("x1",xL(0)).attr("y1",yL(0)).attr("x2",xL(0)).attr("y2",yL(1));
+
+  // p1 底条
+  const p1=0.10, p2=0.62;
+  gL.append("rect").attr("class","base-fill")
+     .attr("x",xL(0)).attr("width",xL(1)-xL(0))
+     .attr("y",yL(p1)).attr("height",yL(0)-yL(p1))
+     .attr("opacity",0).transition().duration(600).attr("opacity",.55);
+
+  // ======= y=p1 与 y=p2 处的水平短刻度与标签（让“紫色方框”对应高度一目了然） =======
+  const yTickLen = 12; // 向右伸出 12px
+  [[p2,"(High) ", "2"], [p1,"(Low) ", "1"]].forEach(([pv, prefix, sub])=>{
+    gL.append("line").attr("class","tick-short-h")
+      .attr("x1",xL(0)).attr("x2",xL(0)+yTickLen).attr("y1",yL(pv)).attr("y2",yL(pv));
+    const lab = gL.append("text")
+      .attr("x",xL(0)-14).attr("y",yL(pv)+5).attr("text-anchor","end");
+    lab.append("tspan").text(prefix);
+    lab.append("tspan").attr("font-style","italic").text("p");
+    lab.append("tspan").attr("baseline-shift","sub").attr("font-size","80%").text(sub);
+  });
+
+  // x 轴刻度与标签 i/n, (i+Δn)/n, 1
+  const xi=0.16, xj=0.40, xj2=0.68;
+  gL.append("line").attr("class","tick-short")
+     .attr("x1",xL(xi)).attr("x2",xL(xi)).attr("y1",yL(0)).attr("y2",yL(0)+12);
+  gL.append("line").attr("class","tick-short")
+     .attr("x1",xL(xj)).attr("x2",xL(xj)).attr("y1",yL(0)).attr("y2",yL(0)+12);
+  gL.append("line").attr("class","tick-short")
+     .attr("x1",xL(1)).attr("x2",xL(1)).attr("y1",yL(0)).attr("y2",yL(0)+12);
+  gL.append("text").attr("class","label math-italic")
+     .attr("x",xL(xi)).attr("y",yL(0)+34).attr("text-anchor","middle").text("i/n");
+  gL.append("text").attr("class","label math-italic")
+     .attr("x",xL(xj)).attr("y",yL(0)+34).attr("text-anchor","middle").text("(i + \u0394n)/n");
+  gL.append("text").attr("class","label")
+     .attr("x",xL(1)).attr("y",yL(0)+34).attr("text-anchor","middle").text("1");
+
+  // 左虚线方框（带填充）作为一个组，便于整体移动
+  const wBar = xL(xj)-xL(xi), hBar = yL(p1)-yL(p2);
+  const leftBox = gL.append("g").attr("class","left-box")
+                    .attr("transform",`translate(${xL(xi)},0)`).style("opacity",0);
+  leftBox.append("rect").attr("class","box-fill")
+         .attr("x",0).attr("y",yL(p2)).attr("width",wBar).attr("height",hBar);
+  leftBox.append("rect").attr("class","box-dash")
+         .attr("x",0).attr("y",yL(p2)).attr("width",wBar).attr("height",hBar);
+  leftBox.transition().duration(700).delay(200).style("opacity",1);
+
+  // 右虚线方框（无填充）
+  gL.append("rect").attr("class","box-dash")
+     .attr("x",xL(xj2)).attr("y",yL(p2)).attr("width",wBar).attr("height",hBar)
+     .style("opacity",0).transition().duration(700).delay(200).style("opacity",1);
+
+  // 向右箭头
+  gL.append("line").attr("class","move-arrow axis-arrow")
+     .attr("x1",xL(xj)+8).attr("y1",yL((p1+p2)/2))
+     .attr("x2",xL(xj2)-10).attr("y2",yL((p1+p2)/2))
+     .style("opacity",0).transition().duration(600).delay(300).style("opacity",1);
+
+  // 交互：悬停整体移动方框
+  gL.on("mouseenter",()=> leftBox.transition().duration(600).attr("transform",`translate(${xL(xj2)},0)`))
+     .on("mouseleave",()=> leftBox.transition().duration(600).attr("transform",`translate(${xL(xi)},0)`));
+
+  /* ================= 右图（维持上一版形状与交互） ================= */
+  const gR = g.append("g").attr("transform",`translate(${right.x},${right.y})`);
+  const xR = d3.scaleLinear().domain([0,1]).range([0,right.w-10]);
+  const yR = d3.scaleLinear().domain([0,50]).range([right.h-20,0]);
+
+  gR.append("line").attr("class","axis-heavy").attr("x1",xR(0)).attr("y1",yR(0)).attr("x2",xR(1)).attr("y2",yR(0));
+  gR.append("line").attr("class","axis-heavy").attr("x1",xR(0)).attr("y1",yR(0)).attr("x2",xR(0)).attr("y2",yR(50));
+  [0,20,40].forEach(t=>{
+    gR.append("line").attr("class","tick-short").attr("x1",xR(0)-8).attr("x2",xR(0)).attr("y1",yR(t)).attr("y2",yR(t));
+    gR.append("text").attr("x",xR(0)-12).attr("y",yR(t)+6).attr("text-anchor","end").text(t);
+  });
+  [0,0.5,1].forEach(t=>{
+    gR.append("line").attr("class","tick-short").attr("x1",xR(t)).attr("x2",xR(t)).attr("y1",yR(0)).attr("y2",yR(0)+12);
+    gR.append("text").attr("x",xR(t)).attr("y",yR(0)+32).attr("text-anchor","middle").text(t===0.5?"0.5":t);
+  });
+  gR.append("text").attr("class","label math-italic").attr("x",xR(0.75)).attr("y",yR(0)+48).text("position");
+
+  const startX = 0.06;
+  const X = d3.range(startX, 1.0001, 0.01);
+  function fBase(x){
+    const y0=35, a1=0.6, b1=0.6;
+    const y05 = y0 - a1*0.5 - b1*0.25;
+    const slope05 = -(a1 + 2*b1*0.5);
+    const b2 = 24;
+    if(x<=0.5) return y0 - a1*x - b1*x*x;
+    const dx = x-0.5; return y05 + slope05*dx - b2*dx*dx;
+  }
+  const offset = 8;
+  const Dsolid = X.map(t=>({x:t,y:fBase(t)}));
+  const Ddash  = X.map(t=>({x:t,y:fBase(t)+offset}));
+
+  const line = d3.line().x(d=>xR(d.x)).y(d=>yR(d.y)).curve(d3.curveCatmullRom.alpha(0.5));
+  function drawPath(sel, cls, data){
+    const p = sel.append("path").attr("class",cls).attr("d",line(data));
+    const L = p.node().getTotalLength();
+    p.attr("stroke-dasharray",`${L} ${L}`).attr("stroke-dashoffset",L)
+     .transition().duration(1000).ease(d3.easeCubicOut).attr("stroke-dashoffset",0);
+  }
+  drawPath(gR,"curve curve-dash", Ddash);
+  drawPath(gR,"curve curve-solid",Dsolid);
+
+  // 交互（右图）
+  const overlay = gR.append("rect")
+    .attr("x",xR(startX)).attr("y",yR(50))
+    .attr("width",xR(1)-xR(startX)).attr("height",yR(0)-yR(50))
+    .style("fill","none").style("pointer-events","all");
+  const cross = gR.append("line").attr("class","crosshair").attr("y1",yR(50)).attr("y2",yR(0)).style("opacity",0);
+  const dot = gR.append("circle").attr("class","dot dot-green").attr("r",4).style("opacity",0);
+  const tooltip = d3.select("#tooltip");
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+  overlay.on("mousemove",function(event){
+    let xm = clamp(xR.invert(d3.pointer(event,this)[0]), startX, 1);
+    const ys = fBase(xm), yd = ys + offset;
+    cross.attr("x1",xR(xm)).attr("x2",xR(xm)).style("opacity",1);
+    dot.attr("cx",xR(xm)).attr("cy",yR(ys)).style("opacity",1);
+    tooltip.style("opacity",1)
+      .html(`<strong>x = ${xm.toFixed(2)}</strong><br/>solid = ${ys.toFixed(2)}<br/>dashed = ${yd.toFixed(2)}`)
+      .style("left",(event.pageX+10)+"px").style("top",(event.pageY-28)+"px");
+  }).on("mouseleave",()=>{cross.style("opacity",0);dot.style("opacity",0);tooltip.style("opacity",0);});
+})();
+</script>
+
+<!-- ▼▼▼ 方案B：子页内“自适应补丁”（关键新增，解决裁切与溢出） ▼▼▼ -->
+<script>
+(function(){
+  const PAD = 24; // 安全留白，避免标题/描边贴边被吃掉
+
+  function fixSVG(svg){
+    try{
+      // 常见剪裁来源：clip-path；移除以还原完整视域（可保留你原始绘制）
+      svg.querySelectorAll('[clip-path]').forEach(el => el.removeAttribute('clip-path'));
+      svg.querySelectorAll('clipPath rect').forEach(r => {
+        r.setAttribute('width','100000'); r.setAttribute('height','100000');
+      });
+
+      let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+      const nodes = svg.querySelectorAll('*');
+      for(let i=0;i<nodes.length;i++){
+        const el = nodes[i];
+        if(typeof el.getBBox === 'function'){
+          try{
+            const b = el.getBBox();
+            if(!isFinite(b.width) || !isFinite(b.height)) continue;
+            minX = Math.min(minX, b.x);
+            minY = Math.min(minY, b.y);
+            maxX = Math.max(maxX, b.x + b.width);
+            maxY = Math.max(maxY, b.y + b.height);
+          }catch(e){}
+        }
+      }
+      if(minX === Infinity) return; // 没有可测元素则跳过
+
+      const vbX = Math.floor(minX - PAD);
+      const vbY = Math.floor(minY - PAD);
+      const vbW = Math.ceil((maxX - minX) + 2*PAD);
+      const vbH = Math.ceil((maxY - minY) + 2*PAD);
+
+      // 关键：viewBox 包住所有要素；移除固定宽高，交给容器宽度自适应，避免超出
+      svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      svg.style.width = '100%';
+      svg.style.height = 'auto';
+      svg.style.overflow = 'visible';
+    }catch(e){}
+  }
+
+  function fixCanvas(c){
+    c.style.maxWidth = '100%';
+    c.style.height = 'auto';
+    c.style.display = 'block';
+  }
+
+  function run(){
+    // 轻量归一化，稳定盒模型；不改变你原有布局
+    const st = document.createElement('style');
+    st.textContent = '*,*:before,*:after{box-sizing:border-box}';
+    document.head && document.head.appendChild(st);
+
+    document.querySelectorAll('svg').forEach(fixSVG);
+    document.querySelectorAll('canvas').forEach(fixCanvas);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', run);
+  }else{
+    run();
+  }
+})();
+</script>
+<!-- ▲▲▲ 方案B补丁结束 ▲▲▲ -->
+
+</body>
+</html>

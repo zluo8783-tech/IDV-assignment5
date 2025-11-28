@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chart 1 (vector space) – snap to grid</title>
+<style>
+  body{margin:0;padding:24px;background:#e6efef;font-family:Georgia,serif;display:flex;justify-content:center}
+  .card{background:#fff;width:980px;padding:26px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  h1{margin:0 0 12px 6px;font-weight:500;color:#222}
+  svg{display:block}
+
+  .frame{fill:none;stroke:#555;stroke-width:2.6px}
+  .grid line{stroke:#dbe2e2;stroke-width:1.2px}
+
+  .edge{stroke:#3b3b3b;stroke-width:2.6px;fill:none;opacity:1;transition:opacity .15s, stroke-width .15s}
+  .diag{stroke:#174e63;stroke-width:2.8px;stroke-dasharray:8 8;fill:none;opacity:.9;transition:opacity .15s, stroke-width .15s}
+  .diag2{stroke:#4c7a87;stroke-width:2.8px;stroke-dasharray:8 8;fill:none;opacity:.9;transition:opacity .15s, stroke-width .15s}
+  .dim{opacity:.25}
+
+  .label{font-size:18px;fill:#222;cursor:default;user-select:none}
+
+  .tooltip{
+    position:absolute;background:rgba(0,0,0,.85);color:#fff;padding:8px 10px;border-radius:8px;
+    font-size:13px;line-height:1.35;pointer-events:none;opacity:0;transition:opacity .12s;
+    transform:translate(12px,-12px)
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Chart 1 (vector space)</h1>
+    <!-- 注意：初始给定固定宽高；补丁脚本会在绘制完成后移除这些属性并设置 viewBox，使其响应式且不裁切 -->
+    <svg id="chart" width="920" height="520"></svg>
+  </div>
+  <div id="tip" class="tooltip"></div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+(function(){
+  const svg = d3.select("#chart"),
+        W = +svg.attr("width"),
+        H = +svg.attr("height");
+
+  const margin = {top:30,right:30,bottom:30,left:30};
+  const innerW = W - margin.left - margin.right;
+  const innerH = H - margin.top - margin.bottom;
+
+  const g = svg.append("g").attr("transform",`translate(${margin.left},${margin.top})`);
+
+  /* ===== 网格 ===== */
+  const step = 60;                               // 一格像素
+  const cols = Math.floor(innerW/step);
+  const rows = Math.floor(innerH/step);
+  const gridW = cols*step, gridH = rows*step;
+
+  const grid = g.append("g").attr("class","grid");
+  for(let c=0;c<=cols;c++){
+    grid.append("line").attr("x1",c*step).attr("x2",c*step).attr("y1",0).attr("y2",gridH);
+  }
+  for(let r=0;r<=rows;r++){
+    grid.append("line").attr("x1",0).attr("x2",gridW).attr("y1",r*step).attr("y2",r*step);
+  }
+  g.append("rect").attr("class","frame").attr("x",0).attr("y",0).attr("width",gridW).attr("height",gridH);
+
+  /* ===== 平行四边形（翻转）定义在“格坐标”中 =====
+     水平边：3格；斜边：2×2格对角线 (dx=+2, dy=-2)  */
+  const horiz = 3;
+  const v = {dx: 2, dy: -2};                 // 向右上，长度 2√2 格
+
+  // 初始顶点（格坐标）——左下、右下、左上、右上
+  let BLg={col:3,row:6};
+  let BRg={col:3+horiz,row:6};
+  let TLg={col:3+v.dx,row:6+v.dy};
+  let TRg={col:3+horiz+v.dx,row:6+v.dy};
+
+  // —— 以“整数格”居中：用舍入后的整格平移，保证仍落在格点上 —— //
+  function centerByWholeGrids(points){
+    const minc=Math.min(...points.map(p=>p.col)), maxc=Math.max(...points.map(p=>p.col));
+    const minr=Math.min(...points.map(p=>p.row)), maxr=Math.max(...points.map(p=>p.row));
+    const cx=(minc+maxc)/2, cy=(minr+maxr)/2;           // 形状中心（格坐标，可能是 .5）
+    const gridCx=cols/2, gridCy=rows/2;                 // 画布中心（格坐标，可能是 .5）
+    const shiftC = Math.round(gridCx - cx);             // 取“整数格”位移
+    const shiftR = Math.round(gridCy - cy);
+    points.forEach(p=>{ p.col += shiftC; p.row += shiftR; });
+  }
+  centerByWholeGrids([BLg,BRg,TLg,TRg]);                // 现在四点仍是整数格坐标
+
+  // 像素坐标
+  const toPx = p => ({x:p.col*step, y:p.row*step});
+  const BL=toPx(BLg), BR=toPx(BRg), TL=toPx(TLg), TR=toPx(TRg);
+
+  /* ===== 绘制边与对角线 ===== */
+  const s = g.append("g").attr("class","shape");
+
+  const edges = [
+    {id:"top",    a:TL, b:TR},
+    {id:"bottom", a:BL, b:BR},
+    {id:"left",   a:TL, b:BL},
+    {id:"right",  a:TR, b:BR}
+  ];
+  s.selectAll("path.edge").data(edges).enter()
+    .append("path").attr("class","edge").attr("id",d=>"edge-"+d.id)
+    .attr("d",d=>`M${d.a.x},${d.a.y} L${d.b.x},${d.b.y}`)
+    .each(function(){
+      const len=this.getTotalLength();
+      d3.select(this).attr("stroke-dasharray",`${len} ${len}`).attr("stroke-dashoffset",len)
+        .transition().duration(900).ease(d3.easeCubicOut).attr("stroke-dashoffset",0);
+    });
+
+  // 箭头（向下）
+  const defs = svg.append("defs");
+  defs.append("marker").attr("id","arrowDown").attr("viewBox","0 0 10 10")
+    .attr("refX",6.5).attr("refY",5).attr("markerWidth",8).attr("markerHeight",8).attr("orient","auto")
+    .append("path").attr("d","M 0 0 L 10 5 L 0 10 z").attr("fill","#174e63");
+
+  // 对角线：均从“上→下”
+  s.append("path").attr("class","diag").attr("id","diag-tlbr")
+    .attr("marker-end","url(#arrowDown)")
+    .attr("d",`M${TL.x},${TL.y} L${BR.x},${BR.y}`)
+    .each(function(){
+      const len=this.getTotalLength();
+      d3.select(this).attr("stroke-dasharray",`${len} ${len}`).attr("stroke-dashoffset",len)
+        .transition().duration(900).delay(250).ease(d3.easeCubicOut).attr("stroke-dashoffset",0);
+    });
+  s.append("path").attr("class","diag2").attr("id","diag-trbl")
+    .attr("marker-end","url(#arrowDown)")
+    .attr("d",`M${TR.x},${TR.y} L${BL.x},${BL.y}`)
+    .each(function(){
+      const len=this.getTotalLength();
+      d3.select(this).attr("stroke-dasharray",`${len} ${len}`).attr("stroke-dashoffset",len)
+        .transition().duration(900).delay(380).ease(d3.easeCubicOut).attr("stroke-dashoffset",0);
+    });
+
+  /* ===== 顶点标签（e 的上/下标） =====
+     顺序：左到右、上到下：e₂^α、e₁^α、e₂^β、e₁^β */
+  function labelAt(p, sup, sub, anchor, dx=0, dy=0, id){
+    const t = s.append("text").attr("class","label").attr("id",id)
+      .attr("x",p.x+dx).attr("y",p.y+dy).attr("text-anchor",anchor);
+    t.append("tspan").attr("font-style","italic").text("e");
+    t.append("tspan").attr("baseline-shift","super").attr("font-style","italic").text(sup);
+    t.append("tspan").attr("baseline-shift","sub").attr("font-size","80%").text(sub);
+    return t;
+  }
+  const lblTL = labelAt(TL,"α","2","end",-10,-10,"lbl-tl");
+  const lblTR = labelAt(TR,"α","1","start",+10,-10,"lbl-tr");
+  const lblBL = labelAt(BL,"β","2","end",-10,+22,"lbl-bl");
+  const lblBR = labelAt(BR,"β","1","start",+10,+22,"lbl-br");
+
+  /* ===== 交互：悬停标签高亮相关边/对角线 + tooltip ===== */
+  const tip = d3.select("#tip");
+
+  const hotspots = [
+    {id:"tl", p:TL, edges:["top","left"],   diag:"diag-tlbr", name:"e\u2082\u207F\u03B1", col:TLg.col, row:TLg.row},
+    {id:"tr", p:TR, edges:["top","right"],  diag:"diag-trbl", name:"e\u2081\u207F\u03B1", col:TRg.col, row:TRg.row},
+    {id:"bl", p:BL, edges:["left","bottom"],diag:"diag-trbl", name:"e\u2082\u207F\u03B2", col:BLg.col, row:BLg.row},
+    {id:"br", p:BR, edges:["right","bottom"],diag:"diag-tlbr", name:"e\u2081\u207F\u03B2", col:BRg.col, row:BRg.row},
+  ];
+
+  s.selectAll("circle.hot").data(hotspots).enter()
+    .append("circle").attr("class","hot")
+    .attr("cx",d=>d.p.x).attr("cy",d=>d.p.y).attr("r",16)
+    .style("fill","transparent").style("pointer-events","all")
+    .on("mousemove", (event,d)=> highlight(d, event.pageX, event.pageY))
+    .on("mouseleave", reset);
+
+  [lblTL,lblTR,lblBL,lblBR].forEach((sel,i)=>{
+    sel.on("mousemove", (event)=> highlight(hotspots[i], event.pageX, event.pageY))
+       .on("mouseleave", reset);
+  });
+
+  function reset(){
+    tip.style("opacity",0);
+    s.selectAll(".edge,.diag,.diag2").classed("dim",false)
+      .transition().duration(120)
+      .style("stroke-width", (d,i,n)=> d3.select(n[i]).classed("edge") ? 2.6 : 2.8);
+  }
+
+  function highlight(d, pageX, pageY){
+    s.selectAll(".edge,.diag,.diag2").classed("dim",true);
+    d.edges.forEach(id=>{
+      s.select("#edge-"+id).classed("dim",false)
+        .transition().duration(120).style("stroke-width",3.6);
+    });
+    s.select("#"+d.diag).classed("dim",false)
+      .transition().duration(120).style("stroke-width",3.6);
+
+    tip.style("opacity",1)
+      .html(
+        `<div><strong>${d.name}</strong></div>`+
+        `<div>grid = (${d.col}, ${d.row})</div>`+
+        `<div>base = 3 格，diag = 2√2 ≈ 2.828 格</div>`
+      )
+      .style("left",(pageX+12)+"px").style("top",(pageY-12)+"px");
+  }
+})();
+</script>
+
+<!-- ▼▼▼ 方案B：子页内“自适应补丁”（关键新增） ▼▼▼ -->
+<script id="svg-autofit-patch">
+(function(){
+  // 安全留白，避免标题/描边被边框“贴边”后看着被吃掉
+  const PAD = 24;
+
+  // 修复 SVG：合并所有元素的几何外接框 -> 设置 viewBox -> 响应式
+  function fixSVG(svg){
+    try{
+      // 常见剪裁来源：clip-path；若存在会把标题/轴“切掉”，这里直接移除以还原完整视域
+      svg.querySelectorAll('[clip-path]').forEach(el => el.removeAttribute('clip-path'));
+      svg.querySelectorAll('clipPath rect').forEach(r => {
+        r.setAttribute('width','100000'); r.setAttribute('height','100000');
+      });
+
+      let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+      const nodes = svg.querySelectorAll('*');
+      for(let i=0;i<nodes.length;i++){
+        const el = nodes[i];
+        if(typeof el.getBBox === 'function'){
+          try{
+            const b = el.getBBox();
+            if(!isFinite(b.width) || !isFinite(b.height)) continue;
+            minX = Math.min(minX, b.x);
+            minY = Math.min(minY, b.y);
+            maxX = Math.max(maxX, b.x + b.width);
+            maxY = Math.max(maxY, b.y + b.height);
+          }catch(e){}
+        }
+      }
+      if(minX === Infinity) return; // 没有可测元素则跳过
+
+      const vbX = Math.floor(minX - PAD);
+      const vbY = Math.floor(minY - PAD);
+      const vbW = Math.ceil((maxX - minX) + 2*PAD);
+      const vbH = Math.ceil((maxY - minY) + 2*PAD);
+
+      // 关键：用 viewBox 确保“全部可见”；去掉固定宽高，交给容器宽度自适应，避免超出
+      svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      svg.style.width = '100%';
+      svg.style.height = 'auto';
+      svg.style.overflow = 'visible'; // 允许描边/箭头微小溢出但不触发滚动
+    }catch(e){}
+  }
+
+  function fixCanvas(c){
+    c.style.maxWidth = '100%';
+    c.style.height = 'auto';
+    c.style.display = 'block';
+  }
+
+  function run(){
+    // 仅微调：不改你原有布局；只确保盒模型稳定
+    const st = document.createElement('style');
+    st.textContent = '*,*:before,*:after{box-sizing:border-box}';
+    document.head && document.head.appendChild(st);
+
+    document.querySelectorAll('svg').forEach(fixSVG);
+    document.querySelectorAll('canvas').forEach(fixCanvas);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', run);
+  }else{
+    run();
+  }
+})();
+</script>
+<!-- ▲▲▲ 方案B补丁结束 ▲▲▲ -->
+
+</body>
+</html>

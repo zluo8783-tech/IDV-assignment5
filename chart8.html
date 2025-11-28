@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chart 8 - Cross Validation Accuracy</title>
+    <style>
+        body {
+            font-family: 'Georgia', serif;
+            background-color: #e8e8e8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            font-size: 32px;
+            color: #333;
+            margin: 0 0 30px 0;
+            font-weight: normal;
+        }
+        
+        .chart-title {
+            font-size: 24px;
+            font-weight: normal;
+            text-anchor: middle;
+        }
+        
+        .axis-label {
+            font-size: 18px;
+        }
+        
+        .bar {
+            cursor: pointer;
+        }
+        
+        .bar:hover {
+            opacity: 0.8;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .dashed-bar {
+            stroke-dasharray: 8, 4;
+            stroke-width: 2;
+            fill: none;
+            cursor: pointer;
+        }
+        
+        .grid-line {
+            stroke: #ddd;
+            stroke-width: 1;
+            shape-rendering: crispEdges;
+        }
+        
+        #loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Chart 8 (simple bars)</h1>
+        <div id="loading">Loading...</div>
+        <div id="chart"></div>
+    </div>
+    
+    <div class="tooltip" id="tooltip"></div>
+
+    <!-- Load D3.js from CDN -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        // Check if D3 loaded successfully
+        window.addEventListener('load', function() {
+            if (typeof d3 === 'undefined') {
+                document.getElementById('loading').innerHTML = 
+                    'Error: D3.js library failed to load.<br>Please check your network connection or <a href="https://d3js.org/d3.v7.min.js" target="_blank">click here to download D3.js</a>';
+                return;
+            }
+            
+            // D3 loaded successfully, hide loading message
+            document.getElementById('loading').style.display = 'none';
+            
+            // Start drawing the chart
+            drawChart();
+        });
+
+        function drawChart() {
+            // Data
+            const data = [
+                { model: 'BERT', value1: 74.4, value2: 64.8 },
+                { model: 'RoBERTa', value1: 81.9, value2: 65.5 },
+                { model: 'BART', value1: 73.1, value2: 63.5 }
+            ];
+
+            // Set up canvas dimensions
+            const margin = { top: 80, right: 60, bottom: 80, left: 80 };
+            const width = 700 - margin.left - margin.right;
+            const height = 500 - margin.top - margin.bottom;
+
+            // Create SVG
+            const svg = d3.select('#chart')
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            // Create scales
+            const x = d3.scaleBand()
+                .domain(data.map(d => d.model))
+                .range([0, width])
+                .padding(0.5);
+
+            const y = d3.scaleLinear()
+                .domain([0, 100])
+                .range([height, 0]);
+
+            // Add grid lines
+            svg.append('g')
+                .attr('class', 'grid')
+                .selectAll('line')
+                .data(y.ticks(5))
+                .enter()
+                .append('line')
+                .attr('class', 'grid-line')
+                .attr('x1', 0)
+                .attr('x2', width)
+                .attr('y1', d => y(d))
+                .attr('y2', d => y(d));
+
+            // Add border
+            svg.append('rect')
+                .attr('x', 0)
+                .attr('y', 0)
+                .attr('width', width)
+                .attr('height', height)
+                .attr('fill', 'none')
+                .attr('stroke', '#666')
+                .attr('stroke-width', 2);
+
+            // Add Y axis
+            const yAxis = svg.append('g')
+                .call(d3.axisLeft(y)
+                    .ticks(5)
+                    .tickFormat(d => d));
+            
+            yAxis.selectAll('text')
+                .style('font-size', '16px');
+
+            // Add X axis labels
+            const xLabels = svg.append('g')
+                .attr('transform', `translate(0,${height})`)
+                .selectAll('text')
+                .data(data)
+                .enter()
+                .append('text')
+                .attr('x', d => x(d.model) + x.bandwidth() / 2)
+                .attr('y', 40)
+                .attr('text-anchor', 'middle')
+                .attr('class', 'axis-label')
+                .text(d => d.model);
+
+            // Add chart title
+            svg.append('text')
+                .attr('x', width / 2)
+                .attr('y', -30)
+                .attr('class', 'chart-title')
+                .text('Cross Validation Accuracy (%)');
+
+            // Add solid bars (with transition animation)
+            const bars = svg.selectAll('.bar')
+                .data(data)
+                .enter()
+                .append('rect')
+                .attr('class', 'bar')
+                .attr('x', d => x(d.model))
+                .attr('y', height)
+                .attr('width', x.bandwidth() * 0.6)
+                .attr('height', 0)
+                .attr('fill', '#D4AF37')
+                .attr('stroke', '#B8941F')
+                .attr('stroke-width', 1);
+
+            // Transition animation: bars grow from bottom
+            bars.transition()
+                .duration(1500)
+                .ease(d3.easeCubicOut)
+                .attr('y', d => y(d.value1))
+                .attr('height', d => height - y(d.value1));
+
+            // Add value labels for solid bars
+            const labels1 = svg.selectAll('.label1')
+                .data(data)
+                .enter()
+                .append('text')
+                .attr('class', 'label1')
+                .attr('x', d => x(d.model) + x.bandwidth() * 0.3)
+                .attr('y', height)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '16px')
+                .style('font-weight', 'normal')
+                .style('opacity', 0)
+                .text(d => d.value1);
+
+            // Value label animation
+            labels1.transition()
+                .duration(1500)
+                .ease(d3.easeCubicOut)
+                .attr('y', d => y(d.value1) - 10)
+                .style('opacity', 1);
+
+            // Add dashed bars
+            const dashedBars = svg.selectAll('.dashed-bar')
+                .data(data)
+                .enter()
+                .append('rect')
+                .attr('class', 'dashed-bar')
+                .attr('x', d => x(d.model) + x.bandwidth() * 0.65)
+                .attr('y', height)
+                .attr('width', x.bandwidth() * 0.3)
+                .attr('height', 0)
+                .attr('stroke', '#D4AF37')
+                .attr('opacity', 0.7);
+
+            // Dashed bar animation
+            dashedBars.transition()
+                .duration(1500)
+                .delay(300)
+                .ease(d3.easeCubicOut)
+                .attr('y', d => y(d.value2))
+                .attr('height', d => height - y(d.value2));
+
+            // Add value labels for dashed bars
+            const labels2 = svg.selectAll('.label2')
+                .data(data)
+                .enter()
+                .append('text')
+                .attr('class', 'label2')
+                .attr('x', d => x(d.model) + x.bandwidth() * 0.8)
+                .attr('y', height)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '16px')
+                .style('font-weight', 'normal')
+                .style('fill', '#D4AF37')
+                .style('opacity', 0)
+                .text(d => d.value2);
+
+            // Dashed label animation
+            labels2.transition()
+                .duration(1500)
+                .delay(300)
+                .ease(d3.easeCubicOut)
+                .attr('y', d => y(d.value2) - 10)
+                .style('opacity', 1);
+
+            // Get tooltip element
+            const tooltip = d3.select('#tooltip');
+
+            // Add interaction for solid bars
+            bars.on('mouseover', function(event, d) {
+                    d3.select(this)
+                        .transition()
+                        .duration(200)
+                        .attr('fill', '#FFD700')
+                        .attr('stroke-width', 2);
+                    
+                    tooltip.style('opacity', 1)
+                        .html(`<strong>${d.model}</strong><br/>Accuracy: ${d.value1}%`)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 30) + 'px');
+                })
+                .on('mouseout', function() {
+                    d3.select(this)
+                        .transition()
+                        .duration(200)
+                        .attr('fill', '#D4AF37')
+                        .attr('stroke-width', 1);
+                    
+                    tooltip.style('opacity', 0);
+                });
+
+            // Add interaction for dashed bars
+            dashedBars.on('mouseover', function(event, d) {
+                    d3.select(this)
+                        .transition()
+                        .duration(200)
+                        .attr('stroke', '#FFD700')
+                        .attr('stroke-width', 3)
+                        .attr('opacity', 1);
+                    
+                    tooltip.style('opacity', 1)
+                        .html(`<strong>${d.model}</strong><br/>Secondary Metric: ${d.value2}%`)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 30) + 'px');
+                })
+                .on('mouseout', function() {
+                    d3.select(this)
+                        .transition()
+                        .duration(200)
+                        .attr('stroke', '#D4AF37')
+                        .attr('stroke-width', 2)
+                        .attr('opacity', 0.7);
+                    
+                    tooltip.style('opacity', 0);
+                });
+        }
+    </script>
+</body>
+</html>
